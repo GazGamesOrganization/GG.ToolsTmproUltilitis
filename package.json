@@ -1,0 +1,21 @@
+{
+  "name": "com.ggtools.tmproultilitis",
+  "version": "1.0.0",
+  "displayName": "TMProUltilitis",
+  "description": "Provides high-level text utilities for TextMeshProUGUI, including controlled typewriter effects, tag-aware parsing, and automated pagination through <page> markers. Features coroutine management per text field, word-safe page splitting, and graceful fallback behavior. Suitable for dialogue UIs, notifications, tutorials, and interfaces requiring interactive text rendering.",
+  "unity": "6000.0",
+ "keywords": [
+    "TMProUltilitis",
+    "TMPro Ultilitis",
+    "GGTools",
+    "GGTools.TMProUltilitis"
+  ],
+  "dependencies": {
+     "com.unity.textmeshpro": "3.0.8"
+  } ,
+  "author": {
+    "name": "Lucas Valverde",
+    "email": "lucashvfgomes@gmail.com",
+    "url": "https://lucashvfgomes.wixsite.com/my-site"
+  }
+}
