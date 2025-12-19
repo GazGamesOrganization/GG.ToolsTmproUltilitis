@@ -6,7 +6,7 @@ using System.Text;
 
 namespace GGTools.TMProUltilitis
 {
-    public static class TMProUltilitis
+    public static class TMProUltils
     {
         private static readonly Dictionary<TextMeshProUGUI, Coroutine> activeCoroutines = new Dictionary<TextMeshProUGUI, Coroutine>();
 
@@ -95,6 +95,58 @@ namespace GGTools.TMProUltilitis
             }
 
             return sb.ToString();
+        }
+
+
+        public static string Colorize(string text, Color color)
+        {
+            string hex = ColorUtility.ToHtmlStringRGB(color);
+            return $"<color=#{hex}>{text}</color>";
+        }
+
+        public static string Bold(string text)
+        {
+            return $"<b>{text}</b>";
+        }
+
+        public static string Italic(string text)
+        {
+            return $"<i>{text}</i>";
+        }
+        public static string Underline(string text)
+        {
+            return $"<u>{text}</u>";
+        }
+
+        public static string Strikethrough(string text)
+        {
+            return $"<s>{text}</s>";
+        }
+
+        public static string SmallCaps(string text)
+        {
+            return $"<smallcaps>{text}</smallcaps>";
+        }
+
+        public static string Highlight(string text, Color color)
+        {
+            string hex = ColorUtility.ToHtmlStringRGB(color);
+            return $"<mark=#{hex}>{text}</mark>";
+        }
+
+        public static string Size(string text, int percent)
+        {
+            return $"<size={percent}%>{text}</size>";
+        }
+
+        public static string CharacterSpacing(string text, float spacing)
+        {
+            return $"<cspace={spacing}>{text}</cspace>";
+        }
+
+        public static string Font(string text, TMP_FontAsset font)
+        {
+            return $"<font=\"{font.name}\">{text}</font>";
         }
 
         private static IEnumerator CharTyper(TextMeshProUGUI textbox, string text = "", float delay = 0)
