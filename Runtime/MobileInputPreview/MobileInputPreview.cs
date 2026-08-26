@@ -263,6 +263,10 @@ namespace GGTools.TMProUltilitis
                           + " bot=" + (view != null ? Mathf.RoundToInt(view.LastMeasuredBottomPixels) : 0)
                           + " corr=" + (view != null ? Mathf.RoundToInt(view.LastCorrectionPixels) : 0);
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            diagnostics += " web=" + WebGLKeyboardBridge.LastState;
+#endif
+
             if (view != null && view.HasDiagnosticsLabel)
             {
                 view.SetDiagnostics(diagnostics);
@@ -429,7 +433,14 @@ namespace GGTools.TMProUltilitis
                 case PreviewActivationMode.Always:
                     return true;
                 default:
+#if UNITY_WEBGL && !UNITY_EDITOR
+                    // On WebGL, Unity draws its own HTML input bar (a fixed div with an input and an OK
+                    // button) on top of the canvas. DOM always renders above the WebGL canvas, so ours would
+                    // sit behind it and duplicate it. WebGLKeyboardBridge is the whole web story instead.
+                    return false;
+#else
                     return TouchScreenKeyboard.isSupported || (Application.isEditor && settings.simulateInEditor);
+#endif
             }
         }
 

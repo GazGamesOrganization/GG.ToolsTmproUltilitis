@@ -6,6 +6,9 @@ Utilitários de texto para `TextMeshProUGUI` + **Mobile Input Preview**.
 - Namespace: `GGTools.TMProUltilitis`
 - Unity: 6000.0+ (TMP vem dentro de `com.unity.ugui` 2.0.0)
 
+Detalhes internos do cálculo de altura do teclado e da instrumentação de debug em device:
+[MOBILE_INPUT_PREVIEW_INTERNALS.md](MOBILE_INPUT_PREVIEW_INTERNALS.md).
+
 ---
 
 ## 1. TMProUltils (typewriter e rich text)
@@ -159,6 +162,57 @@ Adicione **GGTools > TMPro Ultilitis > Mobile Input Preview Target** no `TMP_Inp
 - Submit, clicar fora, desabilitar o campo ou destruí-lo escondem a view.
 - Requer um `EventSystem` na cena (obrigatório pra qualquer UI clicável). Sem ele, um único warning.
 
+### WebGL
+
+Na WebGL o `MobileInputPreview` **se desliga sozinho** em modo `Auto`. Motivo: o Unity já desenha a própria
+barra de input em HTML (`<div style="position:fixed; bottom:0">` com `<input>` e botão OK) por cima do
+canvas. DOM sempre renderiza acima do canvas WebGL, então a sua arte ficaria escondida atrás e duplicada.
+
+O que o pacote faz na web é outra coisa: **consertar o teclado que não abre**.
+
+`WebGLKeyboardBridge` + `Runtime/Plugins/WebGL/GGToolsWebGLKeyboard.jslib`.
+
+O Unity marca o navegador como mobile em `UnityLoader.js` com:
+
+```js
+mobile: /Mobile|Android|iP(ad|hone)/.test(navigator.appVersion)
+```
+
+Esse regex falha em devices com touch de verdade que mandam UA de desktop:
+
+- **iPad, iPadOS 13+** — Safari manda UA de macOS por padrão
+- **Tablet Android com "Site para computador"** — perde o token `Android`
+- WebViews de app com UA customizada
+
+Nesses casos `TouchScreenKeyboard.isSupported` é `false`, o `TMP_InputField` nunca abre teclado nenhum, e o
+campo fica inutilizável. Foi isso que fez uns jogos seus funcionarem na web e outros não — é **device**, não
+template nem projeto.
+
+O bridge sobrescreve `Module.SystemInfo.mobile` quando `navigator.maxTouchPoints > 1` — mesmo heurístico que
+o próprio Unity usa pra detectar iPad. Desktop com mouse fica intocado. Roda sozinho em
+`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`.
+
+```csharp
+// Opt-out: defina GGTOOLS_NO_WEBGL_KEYBOARD_FIX nos Scripting Define Symbols
+// Manual:
+WebGLKeyboardBridge.ForceMobileKeyboard();
+WebGLKeyboardBridge.PeekState();   // só lê, não altera
+```
+
+`WebGLMobileState`: `Desktop` / `AlreadyMobile` / `TouchWithDesktopUserAgent` / `Unavailable`.
+Quando força, loga no console. Aparece como `web=` no dump de diagnóstico.
+
+Teste de 5 segundos no console do navegador do device que falha:
+
+```js
+/Mobile|Android|iP(ad|hone)/.test(navigator.appVersion)   // false = é esse o problema
+navigator.maxTouchPoints                                   // > 1 = o bridge conserta
+```
+
+Pra usar sua arte na web em vez da barra do Unity, seria preciso esconder o `<div>` que o Unity cria
+mantendo o `<input>` focado, e tirar a altura do teclado de `window.visualViewport`. Não implementado —
+depende de detectar um elemento que o Unity cria sem `id`, o que quebra a cada versão.
+
 ### Testar no Editor
 
 1. Cena com `EventSystem`, um `Input Field - TextMeshPro` e o manager + sua arte.
@@ -178,4 +232,7 @@ Runtime/
     MobileInputPreviewView.cs              contrato da arte autorada (barRect/label/bg/botões)
     MobileInputPreviewSettings.cs          configuração de comportamento
     MobileInputPreviewTarget.cs            opt-out por campo
+    WebGLKeyboardBridge.cs                 conserta o teclado em iPad/tablet com UA de desktop
+  Plugins/WebGL/
+    GGToolsWebGLKeyboard.jslib             sobrescreve Module.SystemInfo.mobile
 ```
