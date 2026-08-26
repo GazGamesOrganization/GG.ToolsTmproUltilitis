@@ -100,7 +100,13 @@ var GGToolsWebGLKeyboardLib = {
             byLayout: 0,
             byInner: 0,
             byVisual: 0,
-            hideNative: 0
+            hideNative: 0,
+            keepFocus: 0,
+            blurCount: 0,
+            removeCount: 0,
+            refocusCount: 0,
+            burstCount: 0,
+            burstStart: 0
         };
         window["__ggtoolsKeyboardBarFix"] = state;
 
@@ -212,6 +218,58 @@ var GGToolsWebGLKeyboardLib = {
             });
         }
 
+        // Unity tears the whole bar down on any blur of its hidden input:
+        //
+        //     input.addEventListener("blur", function(e) { _JS_MobileKeyboard_Hide(true); ... });
+        //
+        // While a Unity side field is still attached and the bar is hidden, the user cannot reach
+        // that input at all (pointer-events: none), so every blur it gets is spurious - the IME
+        // moving focus during a clipboard paste, or after the text is cleared. Those blurs closed
+        // the keyboard and forced the player to tap the field again.
+        //
+        // A capture phase listener on `document` runs BEFORE listeners on the target itself, so
+        // stopPropagation here keeps Unity's handler from ever seeing it. blur does not bubble, but
+        // it does capture.
+        document.addEventListener("blur", function(e) {
+            var target = e.target;
+            if (!target || (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA")) {
+                return;
+            }
+
+            var container = target.parentNode;
+            if (!container || !container.style || container.style.position !== "fixed") {
+                return;
+            }
+
+            state.blurCount++;
+
+            if (!state.hideNative || !state.keepFocus) {
+                return;
+            }
+
+            // Runaway guard: if focus keeps bouncing, stop fighting and let the keyboard close
+            // rather than trapping the player with a keyboard that will not go away.
+            var now = Date.now();
+            if (now - state.burstStart > 1000) {
+                state.burstStart = now;
+                state.burstCount = 0;
+            }
+            state.burstCount++;
+            if (state.burstCount > 5) {
+                state.keepFocus = 0;
+                return;
+            }
+
+            e.stopPropagation();
+            state.refocusCount++;
+
+            setTimeout(function() {
+                if (state.keepFocus && document.body.contains(target)) {
+                    target.focus();
+                }
+            }, 0);
+        }, true);
+
         window.visualViewport.addEventListener("resize", schedule);
         window.visualViewport.addEventListener("scroll", schedule);
         window.addEventListener("orientationchange", schedule);
@@ -219,11 +277,17 @@ var GGToolsWebGLKeyboardLib = {
         // The bar is destroyed and rebuilt on every hide/show, so reposition it the moment
         // it reappears instead of waiting for the next viewport event.
         var observer = new MutationObserver(function(records) {
+            var added = false;
             for (var i = 0; i < records.length; i++) {
-                if (records[i].addedNodes.length > 0) {
-                    schedule();
-                    return;
+                if (records[i].removedNodes.length > 0) {
+                    state.removeCount++;
                 }
+                if (records[i].addedNodes.length > 0) {
+                    added = true;
+                }
+            }
+            if (added) {
+                schedule();
             }
         });
         observer.observe(document.body, { childList: true });
@@ -280,6 +344,26 @@ var GGToolsWebGLKeyboardLib = {
         return 1;
     },
 
+    // While set, spurious blurs on Unity's hidden input are swallowed and focus is taken back, so
+    // the keyboard survives a clipboard paste or clearing the whole field. Unity must clear this
+    // before it genuinely wants the keyboard closed, otherwise the keyboard would be trapped open.
+    GGToolsWebGL_SetKeepFocus: function(keep)
+    {
+        var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
+        if (!state) {
+            return 0;
+        }
+
+        state.keepFocus = keep ? 1 : 0;
+
+        if (state.keepFocus) {
+            state.burstCount = 0;
+            state.burstStart = Date.now();
+        }
+
+        return 1;
+    },
+
     // Diagnostics: individual measurements, so the numbers can be read on the device.
     //   0 window.innerHeight           1 visualViewport.height   2 visualViewport.offsetTop
     //   3 bar found (0/1)              4 bar height              5 applied translateY, px
@@ -308,6 +392,10 @@ var GGToolsWebGLKeyboardLib = {
             case 11: return Math.round(state.byVisual);
             case 12: return Math.round(state.height);
             case 13: return state.hideNative;
+            case 14: return state.keepFocus;
+            case 15: return state.blurCount;
+            case 16: return state.refocusCount;
+            case 17: return state.removeCount;
             default: return -1;
         }
     }

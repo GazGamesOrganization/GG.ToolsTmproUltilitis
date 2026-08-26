@@ -69,7 +69,39 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_SetNativeBarHidden(int hidden);
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_SetKeepFocus(int keep);
 #endif
+
+        /// <summary>
+        /// While true, spurious blurs on Unity's hidden input are swallowed and focus is taken straight
+        /// back, so the keyboard survives a clipboard paste or clearing the whole field.
+        ///
+        /// <para>
+        /// Unity destroys the entire keyboard bar on any blur. With the bar hidden the player cannot
+        /// reach that input, so those blurs come from the IME and are never intentional.
+        /// </para>
+        ///
+        /// <para>
+        /// Must be cleared before the keyboard is genuinely meant to close, otherwise the player would be
+        /// stuck with a keyboard that refuses to go away. The JS side also gives up on its own after five
+        /// bounces inside one second.
+        /// </para>
+        /// </summary>
+        public static void SetKeepFocus(bool keep)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                GGToolsWebGL_SetKeepFocus(keep ? 1 : 0);
+            }
+            catch (System.Exception)
+            {
+                // Bridge unavailable. Already reported by InstallKeyboardBarFix.
+            }
+#endif
+        }
 
         /// <summary>
         /// Keyboard height as a fraction of the unfocused viewport, 0..1. Negative when unavailable.
@@ -153,7 +185,11 @@ namespace GGTools.TMProUltilitis
                        " byV=" + GGToolsWebGL_GetDebugValue(11) +
                        " kb=" + GGToolsWebGL_GetDebugValue(12) +
                        " found=" + GGToolsWebGL_GetDebugValue(3) +
-                       " hidden=" + GGToolsWebGL_GetDebugValue(13);
+                       " hidden=" + GGToolsWebGL_GetDebugValue(13) +
+                       " keep=" + GGToolsWebGL_GetDebugValue(14) +
+                       " blur=" + GGToolsWebGL_GetDebugValue(15) +
+                       " refoc=" + GGToolsWebGL_GetDebugValue(16) +
+                       " rm=" + GGToolsWebGL_GetDebugValue(17);
             }
             catch (System.Exception)
             {

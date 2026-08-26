@@ -474,6 +474,11 @@ namespace GGTools.TMProUltilitis
             hasField = true;
             attachedField.onSubmit.AddListener(OnFieldSubmitted);
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // From here on, any blur of Unity's hidden HTML input is the IME acting up, not the player.
+            WebGLKeyboardBridge.SetKeepFocus(settings.hideNativeWebBar);
+#endif
+
             Refresh();
             view.SetVisible(true);
         }
@@ -484,6 +489,12 @@ namespace GGTools.TMProUltilitis
             {
                 return;
             }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Stop defending the focus before anything closes the keyboard, otherwise it would be
+            // trapped open. Detach always runs before DeactivateInputField on the dismiss path.
+            WebGLKeyboardBridge.SetKeepFocus(false);
+#endif
 
             if (attachedField != null)
             {

@@ -180,6 +180,27 @@ propriedades causa reflow, logo não há blur.
 Desligue `hideNativeWebBar` pra voltar ao comportamento do Unity: o preview se desliga na web e a barra
 HTML original reaparece, reposicionada por `transform` (que também não causa blur).
 
+#### Blur espúrio
+
+O Unity destrói a barra inteira em **qualquer** blur do input:
+
+```js
+input.addEventListener("blur", function(e) { _JS_MobileKeyboard_Hide(true); ... });
+```
+
+Com a barra escondida o jogador não alcança esse input (`pointer-events: none`), então todo blur que ele
+recebe vem do IME — colar pelo painel de clipboard, ou apagar o campo inteiro. O resultado era o teclado
+fechar e o jogador ter que tocar no campo de novo.
+
+Um listener de `blur` em **fase de captura no `document`** roda antes dos listeners do próprio alvo
+(`blur` não borbulha, mas captura), então `stopPropagation()` impede que o handler do Unity veja o evento.
+Depois o foco é retomado.
+
+Só age enquanto o `MobileInputPreview` tem campo anexado — `SetKeepFocus(true)` no `Attach`,
+`SetKeepFocus(false)` no `Detach`, sempre antes de qualquer `DeactivateInputField`. E tem trava de
+segurança: mais de 5 blurs em 1 segundo e ele desiste, pra não prender o jogador com um teclado que não
+fecha.
+
 #### Altura do teclado na web
 
 `TouchScreenKeyboard.area` não existe na WebGL — o `MobileKeyboard.js` do módulo não exporta nenhum
