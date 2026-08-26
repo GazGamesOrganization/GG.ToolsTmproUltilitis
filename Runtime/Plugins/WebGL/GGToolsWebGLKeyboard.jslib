@@ -86,6 +86,7 @@ var GGToolsWebGLKeyboardLib = {
 
         var state = {
             height: 0,
+            fraction: 0,
             bar: null,
             innerHeight: 0,
             layoutHeight: 0,
@@ -93,7 +94,13 @@ var GGToolsWebGLKeyboardLib = {
             offsetTop: 0,
             barHeight: 0,
             appliedShift: -1,
-            found: 0
+            found: 0,
+            baselineLayout: 0,
+            baselineInner: 0,
+            byLayout: 0,
+            byInner: 0,
+            byVisual: 0,
+            hideNative: 0
         };
         window["__ggtoolsKeyboardBarFix"] = state;
 
@@ -116,23 +123,44 @@ var GGToolsWebGLKeyboardLib = {
             return null;
         }
 
-        function apply() {
+        // Browsers disagree wildly on which of these shrinks when the keyboard opens, so measure
+        // all three and trust the largest. Same idea as the Android sensor: take a baseline while
+        // nothing is focused, then diff against it.
+        //
+        //   byLayout  documentElement.clientHeight against its baseline
+        //   byInner   window.innerHeight against its baseline
+        //   byVisual  gap left below the visual viewport, needs no baseline
+        function measure() {
             var vv = window.visualViewport;
 
-            state.innerHeight = window.innerHeight;
+            var layoutHeight = document.documentElement.clientHeight;
+            var innerHeight = window.innerHeight;
+
+            state.layoutHeight = layoutHeight;
+            state.innerHeight = innerHeight;
             state.visualHeight = vv.height;
             state.offsetTop = vv.offsetTop;
 
-            // documentElement.clientHeight is the layout viewport, the box a `position: fixed`
-            // element resolves against. Unlike window.innerHeight it does not shrink when the
-            // keyboard opens, so it is the stable reference here.
-            var layoutHeight = document.documentElement.clientHeight;
-            state.layoutHeight = layoutHeight;
+            state.byLayout = state.baselineLayout > 0 ? state.baselineLayout - layoutHeight : 0;
+            state.byInner = state.baselineInner > 0 ? state.baselineInner - innerHeight : 0;
+            state.byVisual = layoutHeight - (vv.offsetTop + vv.height);
 
-            // vv.offsetTop + vv.height is the top edge of the keyboard, in layout viewport
-            // coordinates. What is left below it is what the keyboard covers.
-            var covered = layoutHeight - (vv.offsetTop + vv.height);
-            state.height = covered > 1 ? covered : 0;
+            var best = 0;
+            if (state.byLayout > best) { best = state.byLayout; }
+            if (state.byInner > best) { best = state.byInner; }
+            if (state.byVisual > best) { best = state.byVisual; }
+
+            state.height = best > 1 ? best : 0;
+
+            // Unity gets the height as a fraction of the unfocused viewport, not in pixels: CSS
+            // pixels and Unity's Screen pixels differ by devicePixelRatio and by whatever the page
+            // template does to the canvas. A fraction survives all of that.
+            var reference = state.baselineLayout > 0 ? state.baselineLayout : layoutHeight;
+            state.fraction = reference > 0 ? state.height / reference : 0;
+        }
+
+        function apply() {
+            measure();
 
             var bar = findBar();
             state.bar = bar;
@@ -142,19 +170,30 @@ var GGToolsWebGLKeyboardLib = {
                 return;
             }
 
+            state.barHeight = bar.offsetHeight;
+
+            if (state.hideNative) {
+                // Visually gone, but still focused and still receiving the typing. Both properties
+                // are compositor and hit-testing only: no reflow, so no scroll-into-view, so no
+                // blur - and Unity destroys the bar on blur.
+                bar.style.opacity = "0";
+                bar.style.pointerEvents = "none";
+                bar.style.transform = "";
+                state.appliedShift = 0;
+                return;
+            }
+
+            bar.style.opacity = "";
+            bar.style.pointerEvents = "";
+
             // Unity's inline style has no z-index, so a page overlay could still cover it.
             if (!bar.style.zIndex) {
                 bar.style.zIndex = "2147483647";
             }
 
-            state.barHeight = bar.offsetHeight;
-
-            // Move with `transform`, never with top/bottom.
-            //
-            // top and bottom are layout properties: writing them while the inner <input> holds
-            // focus makes the browser reflow and can trigger a scroll-into-view, which fires blur.
-            // Unity listens for that blur and destroys the whole bar - the bar visibly rises, then
-            // vanishes. `transform` is compositor only: no reflow, no scroll, no blur.
+            // Move with `transform`, never with top/bottom. Those are layout properties: writing
+            // them while the inner <input> holds focus forces a reflow and can trigger a
+            // scroll-into-view, which fires blur, which makes Unity destroy the bar.
             bar.style.transform = state.height > 0 ? "translateY(-" + state.height + "px)" : "";
             state.appliedShift = state.height;
         }
@@ -200,10 +239,53 @@ var GGToolsWebGLKeyboardLib = {
         return state ? Math.round(state.height) : -1;
     },
 
+    // Keyboard height as a fraction of the unfocused viewport, times 10000. -1 when unavailable.
+    // Unit independent, so Unity can just multiply it by Screen.height.
+    GGToolsWebGL_GetKeyboardFraction: function()
+    {
+        var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
+        return state ? Math.round(state.fraction * 10000) : -1;
+    },
+
+    // Records the viewport size while nothing is focused, so later shrinking can be diffed
+    // against it. Call whenever no input field is focused. Ignored once the keyboard is open.
+    GGToolsWebGL_CaptureKeyboardBaseline: function()
+    {
+        var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
+        if (!state) {
+            return 0;
+        }
+
+        var layoutHeight = document.documentElement.clientHeight;
+        var innerHeight = window.innerHeight;
+
+        // Only ever grow the baseline. A baseline captured while the keyboard was still closing
+        // would be too small and would permanently understate every later measurement.
+        if (layoutHeight > state.baselineLayout) { state.baselineLayout = layoutHeight; }
+        if (innerHeight > state.baselineInner) { state.baselineInner = innerHeight; }
+
+        return 1;
+    },
+
+    // Hides Unity's own HTML bar while keeping its input focused, so a Unity drawn bar can take
+    // over. Pass 0 to restore it.
+    GGToolsWebGL_SetNativeBarHidden: function(hidden)
+    {
+        var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
+        if (!state) {
+            return 0;
+        }
+
+        state.hideNative = hidden ? 1 : 0;
+        return 1;
+    },
+
     // Diagnostics: individual measurements, so the numbers can be read on the device.
     //   0 window.innerHeight           1 visualViewport.height   2 visualViewport.offsetTop
     //   3 bar found (0/1)              4 bar height              5 applied translateY, px
-    //   6 documentElement.clientHeight
+    //   6 documentElement.clientHeight 7 baseline layout         8 baseline inner
+    //   9 byLayout                    10 byInner                11 byVisual
+    //  12 chosen height               13 native bar hidden (0/1)
     GGToolsWebGL_GetDebugValue: function(index)
     {
         var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
@@ -219,6 +301,13 @@ var GGToolsWebGLKeyboardLib = {
             case 4: return Math.round(state.barHeight);
             case 5: return Math.round(state.appliedShift);
             case 6: return Math.round(state.layoutHeight);
+            case 7: return Math.round(state.baselineLayout);
+            case 8: return Math.round(state.baselineInner);
+            case 9: return Math.round(state.byLayout);
+            case 10: return Math.round(state.byInner);
+            case 11: return Math.round(state.byVisual);
+            case 12: return Math.round(state.height);
+            case 13: return state.hideNative;
             default: return -1;
         }
     }

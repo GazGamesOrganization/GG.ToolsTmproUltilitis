@@ -94,6 +94,12 @@ namespace GGTools.TMProUltilitis
             Instance = this;
             keyboardSensor.Configure(settings);
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Unity's HTML bar keeps its input focused while invisible, so typing still works and this
+            // preview mirrors it. Without hiding it, the two bars would fight over the same screen edge.
+            WebGLKeyboardBridge.SetNativeBarHidden(settings.hideNativeWebBar);
+#endif
+
             if (view == null)
             {
                 view = GetComponentInChildren<MobileInputPreviewView>(true);
@@ -437,10 +443,10 @@ namespace GGTools.TMProUltilitis
                     return true;
                 default:
 #if UNITY_WEBGL && !UNITY_EDITOR
-                    // On WebGL, Unity draws its own HTML input bar (a fixed div with an input and an OK
-                    // button) on top of the canvas. DOM always renders above the WebGL canvas, so ours would
-                    // sit behind it and duplicate it. WebGLKeyboardBridge is the whole web story instead.
-                    return false;
+                    // Unity draws its own HTML input bar over the canvas on WebGL, and it anchors it with
+                    // position:fixed bottom:0, which lands behind the soft keyboard. Taking over means
+                    // hiding that bar, so this preview only runs when hideNativeWebBar is on.
+                    return settings.hideNativeWebBar && TouchScreenKeyboard.isSupported;
 #else
                     return TouchScreenKeyboard.isSupported || (Application.isEditor && settings.simulateInEditor);
 #endif

@@ -164,11 +164,41 @@ Adicione **GGTools > TMPro Ultilitis > Mobile Input Preview Target** no `TMP_Inp
 
 ### WebGL
 
-Na WebGL o `MobileInputPreview` **se desliga sozinho** em modo `Auto`. Motivo: o Unity já desenha a própria
-barra de input em HTML (`<div style="position:fixed; bottom:0">` com `<input>` e botão OK) por cima do
-canvas. DOM sempre renderiza acima do canvas WebGL, então a sua arte ficaria escondida atrás e duplicada.
+Na WebGL a sua arte é usada igual no Android, mas a altura do teclado vem do browser e a barra HTML do
+Unity é escondida.
 
-O que o pacote faz na web é outra coisa: **consertar o teclado que não abre**.
+O Unity desenha uma barra própria em HTML (`<div style="position:fixed; bottom:0">` com `<input>` e botão
+OK) por cima do canvas. Ela é inútil: `position: fixed` resolve contra o layout viewport, que o teclado
+mobile não encolhe, então ela renderiza **atrás do teclado**. Tentar reposicioná-la com `top`/`bottom`
+dispara reflow, scroll-into-view e `blur` — e o Unity destrói a barra no blur.
+
+Com `hideNativeWebBar` ligado (default), a barra do Unity recebe `opacity: 0` e `pointer-events: none`.
+Ela some visualmente mas o `<input>` **continua focado e recebendo a digitação**, então o
+`TMP_InputField` segue atualizando normalmente e o `MobileInputPreview` espelha. Nenhuma das duas
+propriedades causa reflow, logo não há blur.
+
+Desligue `hideNativeWebBar` pra voltar ao comportamento do Unity: o preview se desliga na web e a barra
+HTML original reaparece, reposicionada por `transform` (que também não causa blur).
+
+#### Altura do teclado na web
+
+`TouchScreenKeyboard.area` não existe na WebGL — o `MobileKeyboard.js` do módulo não exporta nenhum
+`GetRect`. A medição vem do browser, e como cada navegador encolhe uma coisa diferente, o bridge mede as
+três e usa a maior:
+
+| | |
+|---|---|
+| `byLayout` | `documentElement.clientHeight` contra o baseline |
+| `byInner` | `window.innerHeight` contra o baseline |
+| `byVisual` | `layout - (visualViewport.offsetTop + visualViewport.height)` |
+
+Mesmo conceito de baseline do Android: capturado enquanto nenhum campo está focado, e só cresce — um
+baseline pego com o teclado fechando ficaria pequeno demais e subestimaria tudo depois.
+
+O valor cruza a ponte como **fração** do viewport (×10000), não em pixels. Px CSS, px de device e px do
+`Screen` do Unity são três coisas diferentes; fração sobrevive a todas.
+
+#### O outro fix da web: o teclado que não abre
 
 `WebGLKeyboardBridge` + `Runtime/Plugins/WebGL/GGToolsWebGLKeyboard.jslib`.
 

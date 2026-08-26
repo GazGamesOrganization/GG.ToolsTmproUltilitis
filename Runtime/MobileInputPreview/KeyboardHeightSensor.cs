@@ -18,7 +18,9 @@ namespace GGTools.TMProUltilitis
         /// <summary>Ignores every measurement and uses fallbackKeyboardHeightPercent.</summary>
         FixedPercent = 3,
         /// <summary>Editor only: fakes a keyboard with simulatedKeyboardHeightPercent.</summary>
-        EditorSimulated = 4
+        EditorSimulated = 4,
+        /// <summary>WebGL only: asks the browser through the viewport bridge.</summary>
+        WebGLViewport = 5
     }
 
     /// <summary>
@@ -70,7 +72,15 @@ namespace GGTools.TMProUltilitis
         /// </summary>
         public void CaptureBaseline()
         {
-            if (ResolveSource() != KeyboardHeightSource.AndroidVisibleFrame)
+            KeyboardHeightSource source = ResolveSource();
+
+            if (source == KeyboardHeightSource.WebGLViewport)
+            {
+                WebGLKeyboardBridge.CaptureBaseline();
+                return;
+            }
+
+            if (source != KeyboardHeightSource.AndroidVisibleFrame)
             {
                 return;
             }
@@ -114,6 +124,20 @@ namespace GGTools.TMProUltilitis
 
                 case KeyboardHeightSource.FixedPercent:
                     return Screen.height * settings.fallbackKeyboardHeightPercent;
+
+                case KeyboardHeightSource.WebGLViewport:
+                {
+                    // The browser reports a fraction of the viewport, not pixels, so it converts
+                    // straight into Unity units without worrying about devicePixelRatio.
+                    float fraction = WebGLKeyboardBridge.KeyboardHeightFraction;
+                    if (fraction >= 0f)
+                    {
+                        return Screen.height * fraction;
+                    }
+
+                    ResolvedSource = KeyboardHeightSource.FixedPercent;
+                    return Screen.height * settings.fallbackKeyboardHeightPercent;
+                }
 
                 case KeyboardHeightSource.AndroidVisibleFrame:
                 {
@@ -178,7 +202,13 @@ namespace GGTools.TMProUltilitis
             }
 #endif
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // TouchScreenKeyboard.area does not exist on WebGL: the WebGL MobileKeyboard.js exports
+            // no GetRect at all, so it is always Rect.zero. The browser viewport is the only source.
+            return KeyboardHeightSource.WebGLViewport;
+#else
             return KeyboardHeightSource.TouchScreenKeyboardArea;
+#endif
         }
 
         /// <summary>

@@ -60,7 +60,77 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_GetDebugValue(int index);
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_GetKeyboardFraction();
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_CaptureKeyboardBaseline();
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_SetNativeBarHidden(int hidden);
 #endif
+
+        /// <summary>
+        /// Keyboard height as a fraction of the unfocused viewport, 0..1. Negative when unavailable.
+        /// A fraction rather than pixels because CSS pixels, device pixels and Unity's Screen pixels all
+        /// differ; multiplying this by <c>Screen.height</c> lands in Unity's units directly.
+        /// </summary>
+        public static float KeyboardHeightFraction
+        {
+            get
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                try
+                {
+                    int raw = GGToolsWebGL_GetKeyboardFraction();
+                    return raw < 0 ? -1f : raw / 10000f;
+                }
+                catch (System.Exception)
+                {
+                    return -1f;
+                }
+#else
+                return -1f;
+#endif
+            }
+        }
+
+        /// <summary>
+        /// Records the viewport size while nothing is focused, so later shrinking can be diffed against
+        /// it. Same baseline trick the Android sensor uses for the navigation bar.
+        /// </summary>
+        public static void CaptureBaseline()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                GGToolsWebGL_CaptureKeyboardBaseline();
+            }
+            catch (System.Exception)
+            {
+                // Bridge unavailable. Already reported by InstallKeyboardBarFix.
+            }
+#endif
+        }
+
+        /// <summary>
+        /// Hides Unity's own HTML keyboard bar while keeping its input focused, so a Unity drawn bar can
+        /// take over. The hidden input still receives every keystroke.
+        /// </summary>
+        public static void SetNativeBarHidden(bool hidden)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                GGToolsWebGL_SetNativeBarHidden(hidden ? 1 : 0);
+            }
+            catch (System.Exception)
+            {
+                // Bridge unavailable. Already reported by InstallKeyboardBarFix.
+            }
+#endif
+        }
 
         /// <summary>
         /// One line with every browser measurement behind the keyboard bar positioning.
@@ -73,12 +143,17 @@ namespace GGTools.TMProUltilitis
             try
             {
                 return "layout=" + GGToolsWebGL_GetDebugValue(6) +
+                       "/" + GGToolsWebGL_GetDebugValue(7) +
                        " inner=" + GGToolsWebGL_GetDebugValue(0) +
+                       "/" + GGToolsWebGL_GetDebugValue(8) +
                        " vv=" + GGToolsWebGL_GetDebugValue(1) +
                        " off=" + GGToolsWebGL_GetDebugValue(2) +
+                       "\nbyL=" + GGToolsWebGL_GetDebugValue(9) +
+                       " byI=" + GGToolsWebGL_GetDebugValue(10) +
+                       " byV=" + GGToolsWebGL_GetDebugValue(11) +
+                       " kb=" + GGToolsWebGL_GetDebugValue(12) +
                        " found=" + GGToolsWebGL_GetDebugValue(3) +
-                       " barh=" + GGToolsWebGL_GetDebugValue(4) +
-                       " shift=" + GGToolsWebGL_GetDebugValue(5);
+                       " hidden=" + GGToolsWebGL_GetDebugValue(13);
             }
             catch (System.Exception)
             {

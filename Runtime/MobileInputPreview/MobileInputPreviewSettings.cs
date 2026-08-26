@@ -60,6 +60,10 @@ namespace GGTools.TMProUltilitis
         [Tooltip("Maximum characters shown at once. Longer text is windowed around the caret so the caret stays visible.")]
         public int charWindow = 60;
 
+        [Header("WebGL")]
+        [Tooltip("Hide the HTML input bar Unity draws over the canvas on WebGL, so this preview takes over. The hidden input stays focused and keeps receiving the typing. Turn off to keep Unity's own bar and disable this preview on the web.")]
+        public bool hideNativeWebBar = true;
+
         [Header("Debug")]
         [Tooltip("Writes every measured value into the view's diagnosticsLabel, so the numbers can be read straight from the device.")]
         public bool showDiagnostics = false;
