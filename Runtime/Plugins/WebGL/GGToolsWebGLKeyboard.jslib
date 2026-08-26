@@ -88,10 +88,11 @@ var GGToolsWebGLKeyboardLib = {
             height: 0,
             bar: null,
             innerHeight: 0,
+            layoutHeight: 0,
             visualHeight: 0,
             offsetTop: 0,
             barHeight: 0,
-            appliedTop: -1,
+            appliedShift: -1,
             found: 0
         };
         window["__ggtoolsKeyboardBarFix"] = state;
@@ -122,16 +123,22 @@ var GGToolsWebGLKeyboardLib = {
             state.visualHeight = vv.height;
             state.offsetTop = vv.offsetTop;
 
-            // Reported only for diagnostics. Not used to position anything: window.innerHeight
-            // also shrinks with the keyboard in some browsers, which makes this read near zero.
-            var covered = window.innerHeight - vv.height - vv.offsetTop;
+            // documentElement.clientHeight is the layout viewport, the box a `position: fixed`
+            // element resolves against. Unlike window.innerHeight it does not shrink when the
+            // keyboard opens, so it is the stable reference here.
+            var layoutHeight = document.documentElement.clientHeight;
+            state.layoutHeight = layoutHeight;
+
+            // vv.offsetTop + vv.height is the top edge of the keyboard, in layout viewport
+            // coordinates. What is left below it is what the keyboard covers.
+            var covered = layoutHeight - (vv.offsetTop + vv.height);
             state.height = covered > 1 ? covered : 0;
 
             var bar = findBar();
             state.bar = bar;
             state.found = bar ? 1 : 0;
             if (!bar) {
-                state.appliedTop = -1;
+                state.appliedShift = -1;
                 return;
             }
 
@@ -140,39 +147,42 @@ var GGToolsWebGLKeyboardLib = {
                 bar.style.zIndex = "2147483647";
             }
 
-            var barHeight = bar.offsetHeight;
-            state.barHeight = barHeight;
+            state.barHeight = bar.offsetHeight;
 
-            if (barHeight <= 0) {
-                // Not laid out yet. Fall back to the bottom based formula for this pass.
-                bar.style.bottom = state.height + "px";
-                state.appliedTop = -1;
-                return;
-            }
-
-            // Anchor to the VISUAL viewport instead of the layout one.
+            // Move with `transform`, never with top/bottom.
             //
-            // A fixed element resolves `top` against the layout viewport. vv.offsetTop is where the
-            // visual viewport starts inside it, and vv.height is how tall the visible area is, so
-            // vv.offsetTop + vv.height is exactly the top edge of the keyboard in the same
-            // coordinates. Placing the bar's bottom there needs no window.innerHeight at all.
-            var top = vv.offsetTop + vv.height - barHeight;
-
-            bar.style.top = top + "px";
-            bar.style.bottom = "auto";
-            state.appliedTop = top;
+            // top and bottom are layout properties: writing them while the inner <input> holds
+            // focus makes the browser reflow and can trigger a scroll-into-view, which fires blur.
+            // Unity listens for that blur and destroys the whole bar - the bar visibly rises, then
+            // vanishes. `transform` is compositor only: no reflow, no scroll, no blur.
+            bar.style.transform = state.height > 0 ? "translateY(-" + state.height + "px)" : "";
+            state.appliedShift = state.height;
         }
 
-        window.visualViewport.addEventListener("resize", apply);
-        window.visualViewport.addEventListener("scroll", apply);
-        window.addEventListener("orientationchange", apply);
+        // Coalesce bursts of resize and scroll events into one write per frame. Without this a
+        // style write that nudges the viewport can feed the next event and spin.
+        var scheduled = false;
+        function schedule() {
+            if (scheduled) {
+                return;
+            }
+            scheduled = true;
+            window.requestAnimationFrame(function() {
+                scheduled = false;
+                apply();
+            });
+        }
+
+        window.visualViewport.addEventListener("resize", schedule);
+        window.visualViewport.addEventListener("scroll", schedule);
+        window.addEventListener("orientationchange", schedule);
 
         // The bar is destroyed and rebuilt on every hide/show, so reposition it the moment
         // it reappears instead of waiting for the next viewport event.
         var observer = new MutationObserver(function(records) {
             for (var i = 0; i < records.length; i++) {
                 if (records[i].addedNodes.length > 0) {
-                    apply();
+                    schedule();
                     return;
                 }
             }
@@ -191,8 +201,9 @@ var GGToolsWebGLKeyboardLib = {
     },
 
     // Diagnostics: individual measurements, so the numbers can be read on the device.
-    //   0 window.innerHeight   1 visualViewport.height   2 visualViewport.offsetTop
-    //   3 bar found (0/1)      4 bar height              5 applied top (-1 = not applied)
+    //   0 window.innerHeight           1 visualViewport.height   2 visualViewport.offsetTop
+    //   3 bar found (0/1)              4 bar height              5 applied translateY, px
+    //   6 documentElement.clientHeight
     GGToolsWebGL_GetDebugValue: function(index)
     {
         var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
@@ -206,7 +217,8 @@ var GGToolsWebGLKeyboardLib = {
             case 2: return Math.round(state.offsetTop);
             case 3: return state.found;
             case 4: return Math.round(state.barHeight);
-            case 5: return Math.round(state.appliedTop);
+            case 5: return Math.round(state.appliedShift);
+            case 6: return Math.round(state.layoutHeight);
             default: return -1;
         }
     }

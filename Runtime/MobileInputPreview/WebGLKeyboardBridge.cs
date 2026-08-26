@@ -72,12 +72,13 @@ namespace GGTools.TMProUltilitis
 #if UNITY_WEBGL && !UNITY_EDITOR
             try
             {
-                return "inner=" + GGToolsWebGL_GetDebugValue(0) +
+                return "layout=" + GGToolsWebGL_GetDebugValue(6) +
+                       " inner=" + GGToolsWebGL_GetDebugValue(0) +
                        " vv=" + GGToolsWebGL_GetDebugValue(1) +
                        " off=" + GGToolsWebGL_GetDebugValue(2) +
                        " found=" + GGToolsWebGL_GetDebugValue(3) +
                        " barh=" + GGToolsWebGL_GetDebugValue(4) +
-                       " top=" + GGToolsWebGL_GetDebugValue(5);
+                       " shift=" + GGToolsWebGL_GetDebugValue(5);
             }
             catch (System.Exception)
             {
