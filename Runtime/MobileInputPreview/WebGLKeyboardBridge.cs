@@ -57,7 +57,36 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_GetKeyboardHeight();
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_GetDebugValue(int index);
 #endif
+
+        /// <summary>
+        /// One line with every browser measurement behind the keyboard bar positioning.
+        /// <c>inner</c> window.innerHeight, <c>vv</c> visualViewport.height, <c>off</c> its offsetTop,
+        /// <c>found</c> whether the bar was located, <c>barh</c> its height, <c>top</c> the applied top.
+        /// </summary>
+        public static string BuildDebugDump()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                return "inner=" + GGToolsWebGL_GetDebugValue(0) +
+                       " vv=" + GGToolsWebGL_GetDebugValue(1) +
+                       " off=" + GGToolsWebGL_GetDebugValue(2) +
+                       " found=" + GGToolsWebGL_GetDebugValue(3) +
+                       " barh=" + GGToolsWebGL_GetDebugValue(4) +
+                       " top=" + GGToolsWebGL_GetDebugValue(5);
+            }
+            catch (System.Exception)
+            {
+                return "webgl bridge unavailable";
+            }
+#else
+            return string.Empty;
+#endif
+        }
 
         /// <summary>Result of the last <see cref="ForceMobileKeyboard"/> call.</summary>
         public static WebGLMobileState LastState { get; private set; } = WebGLMobileState.Unavailable;

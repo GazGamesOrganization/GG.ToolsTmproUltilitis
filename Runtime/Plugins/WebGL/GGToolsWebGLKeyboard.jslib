@@ -84,7 +84,16 @@ var GGToolsWebGLKeyboardLib = {
             return 1;
         }
 
-        var state = { height: 0, bar: null };
+        var state = {
+            height: 0,
+            bar: null,
+            innerHeight: 0,
+            visualHeight: 0,
+            offsetTop: 0,
+            barHeight: 0,
+            appliedTop: -1,
+            found: 0
+        };
         window["__ggtoolsKeyboardBarFix"] = state;
 
         // Unity creates the container without id or class, so match it by shape: a fixed
@@ -106,27 +115,52 @@ var GGToolsWebGLKeyboardLib = {
             return null;
         }
 
-        function keyboardHeight() {
-            var vv = window.visualViewport;
-            var covered = window.innerHeight - vv.height - vv.offsetTop;
-            return covered > 1 ? covered : 0;
-        }
-
         function apply() {
-            state.height = keyboardHeight();
+            var vv = window.visualViewport;
+
+            state.innerHeight = window.innerHeight;
+            state.visualHeight = vv.height;
+            state.offsetTop = vv.offsetTop;
+
+            // Reported only for diagnostics. Not used to position anything: window.innerHeight
+            // also shrinks with the keyboard in some browsers, which makes this read near zero.
+            var covered = window.innerHeight - vv.height - vv.offsetTop;
+            state.height = covered > 1 ? covered : 0;
 
             var bar = findBar();
             state.bar = bar;
+            state.found = bar ? 1 : 0;
             if (!bar) {
+                state.appliedTop = -1;
                 return;
             }
-
-            bar.style.bottom = state.height + "px";
 
             // Unity's inline style has no z-index, so a page overlay could still cover it.
             if (!bar.style.zIndex) {
                 bar.style.zIndex = "2147483647";
             }
+
+            var barHeight = bar.offsetHeight;
+            state.barHeight = barHeight;
+
+            if (barHeight <= 0) {
+                // Not laid out yet. Fall back to the bottom based formula for this pass.
+                bar.style.bottom = state.height + "px";
+                state.appliedTop = -1;
+                return;
+            }
+
+            // Anchor to the VISUAL viewport instead of the layout one.
+            //
+            // A fixed element resolves `top` against the layout viewport. vv.offsetTop is where the
+            // visual viewport starts inside it, and vv.height is how tall the visible area is, so
+            // vv.offsetTop + vv.height is exactly the top edge of the keyboard in the same
+            // coordinates. Placing the bar's bottom there needs no window.innerHeight at all.
+            var top = vv.offsetTop + vv.height - barHeight;
+
+            bar.style.top = top + "px";
+            bar.style.bottom = "auto";
+            state.appliedTop = top;
         }
 
         window.visualViewport.addEventListener("resize", apply);
@@ -154,6 +188,27 @@ var GGToolsWebGLKeyboardLib = {
     {
         var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
         return state ? Math.round(state.height) : -1;
+    },
+
+    // Diagnostics: individual measurements, so the numbers can be read on the device.
+    //   0 window.innerHeight   1 visualViewport.height   2 visualViewport.offsetTop
+    //   3 bar found (0/1)      4 bar height              5 applied top (-1 = not applied)
+    GGToolsWebGL_GetDebugValue: function(index)
+    {
+        var state = (typeof window !== "undefined") ? window["__ggtoolsKeyboardBarFix"] : null;
+        if (!state) {
+            return -1;
+        }
+
+        switch (index) {
+            case 0: return Math.round(state.innerHeight);
+            case 1: return Math.round(state.visualHeight);
+            case 2: return Math.round(state.offsetTop);
+            case 3: return state.found;
+            case 4: return Math.round(state.barHeight);
+            case 5: return Math.round(state.appliedTop);
+            default: return -1;
+        }
     }
 };
 
