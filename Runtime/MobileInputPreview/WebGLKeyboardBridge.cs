@@ -51,18 +51,95 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_GetMobileState();
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_InstallKeyboardBarFix();
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_GetKeyboardHeight();
 #endif
 
         /// <summary>Result of the last <see cref="ForceMobileKeyboard"/> call.</summary>
         public static WebGLMobileState LastState { get; private set; } = WebGLMobileState.Unavailable;
+
+        /// <summary>True once the keyboard bar repositioning is watching the visual viewport.</summary>
+        public static bool BarFixInstalled { get; private set; }
+
+        /// <summary>
+        /// Keyboard height in CSS pixels as measured by the browser, or -1 when unavailable.
+        /// Diagnostics only: nothing in the package positions anything from it on WebGL.
+        /// </summary>
+        public static int KeyboardHeightCssPixels
+        {
+            get
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                try
+                {
+                    return GGToolsWebGL_GetKeyboardHeight();
+                }
+                catch (System.Exception)
+                {
+                    return -1;
+                }
+#else
+                return -1;
+#endif
+            }
+        }
 
 #if !GGTOOLS_NO_WEBGL_KEYBOARD_FIX
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoApply()
         {
             ForceMobileKeyboard();
+            InstallKeyboardBarFix();
         }
 #endif
+
+        /// <summary>
+        /// Keeps Unity's own HTML keyboard bar above the soft keyboard.
+        ///
+        /// <para>
+        /// Unity anchors that bar with <c>position: fixed; bottom: 0</c>, which resolves against the layout
+        /// viewport. A soft keyboard shrinks the visual viewport, not the layout one, and Unity's page
+        /// template pins the layout viewport with <c>height=device-height</c> on top of that. The bar
+        /// therefore renders behind the keyboard. This watches <c>window.visualViewport</c> and lifts the
+        /// bar by the measured keyboard height.
+        /// </para>
+        ///
+        /// <para>Safe to call more than once. Does nothing outside a WebGL player.</para>
+        /// </summary>
+        public static bool InstallKeyboardBarFix()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            int result;
+
+            try
+            {
+                result = GGToolsWebGL_InstallKeyboardBarFix();
+            }
+            catch (System.Exception e)
+            {
+                BarFixInstalled = false;
+                Debug.LogWarning(LogPrefix + "WebGL keyboard bar fix unavailable. " + e.Message);
+                return false;
+            }
+
+            BarFixInstalled = result > 0;
+
+            if (result == 0)
+            {
+                Debug.LogWarning(LogPrefix + "Browser has no visualViewport support, so the native keyboard bar " +
+                                 "may render behind the keyboard.");
+            }
+
+            return BarFixInstalled;
+#else
+            BarFixInstalled = false;
+            return false;
+#endif
+        }
 
         /// <summary>
         /// Turns the browser keyboard back on when the device has touch but reports a desktop user agent.

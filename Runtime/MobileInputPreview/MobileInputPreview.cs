@@ -264,7 +264,9 @@ namespace GGTools.TMProUltilitis
                           + " corr=" + (view != null ? Mathf.RoundToInt(view.LastCorrectionPixels) : 0);
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            diagnostics += " web=" + WebGLKeyboardBridge.LastState;
+            diagnostics += " web=" + WebGLKeyboardBridge.LastState
+                           + " barfix=" + (WebGLKeyboardBridge.BarFixInstalled ? 1 : 0)
+                           + " vvkb=" + WebGLKeyboardBridge.KeyboardHeightCssPixels;
 #endif
 
             if (view != null && view.HasDiagnosticsLabel)

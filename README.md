@@ -192,15 +192,44 @@ O bridge sobrescreve `Module.SystemInfo.mobile` quando `navigator.maxTouchPoints
 o próprio Unity usa pra detectar iPad. Desktop com mouse fica intocado. Roda sozinho em
 `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`.
 
+#### Fix 2 — a barra do Unity aparece atrás do teclado
+
+O `JS_MobileKeyboard_Show` cria a barra com `position:fixed; bottom:0px`.
+
+`position: fixed` resolve contra o **layout viewport**. Teclado mobile não encolhe o layout viewport — ele
+encolhe o **visual viewport**. E o template do Unity ainda pina o layout viewport com
+`height=device-height` no meta viewport. Resultado: `bottom:0` cai atrás do teclado, e a barra some
+justamente quando é necessária.
+
+`InstallKeyboardBarFix()` observa `window.visualViewport` e levanta a barra:
+
+```js
+keyboardHeight = window.innerHeight - visualViewport.height - visualViewport.offsetTop;
+bar.style.bottom = keyboardHeight + "px";
+```
+
+O Unity escreve aquele estilo inline só ao **criar** o container, nunca ao reusar, então sobrescrever
+`bottom` depois gruda. Como o container é destruído e recriado a cada hide/show, tem um `MutationObserver`
+no `body` e uma busca nova a cada evento. A barra não tem `id` nem classe — é encontrada pelo formato: `div`
+com `position: fixed`, filho direto do `body`, contendo `input` ou `textarea`.
+
+Também recebe `z-index` máximo, já que o estilo do Unity não define nenhum.
+
+Navegador sem `visualViewport` (muito antigo): um warning e a barra fica como estava.
+
 ```csharp
-// Opt-out: defina GGTOOLS_NO_WEBGL_KEYBOARD_FIX nos Scripting Define Symbols
+// Opt-out dos dois fixes: defina GGTOOLS_NO_WEBGL_KEYBOARD_FIX nos Scripting Define Symbols
 // Manual:
 WebGLKeyboardBridge.ForceMobileKeyboard();
-WebGLKeyboardBridge.PeekState();   // só lê, não altera
+WebGLKeyboardBridge.InstallKeyboardBarFix();
+WebGLKeyboardBridge.PeekState();               // só lê, não altera
+WebGLKeyboardBridge.KeyboardHeightCssPixels;   // altura medida pelo visualViewport
 ```
 
 `WebGLMobileState`: `Desktop` / `AlreadyMobile` / `TouchWithDesktopUserAgent` / `Unavailable`.
-Quando força, loga no console. Aparece como `web=` no dump de diagnóstico.
+
+No dump de diagnóstico: `web=` (estado), `barfix=` (1 = observer instalado), `vvkb=` (altura do teclado em
+px CSS medida pelo `visualViewport`).
 
 Teste de 5 segundos no console do navegador do device que falha:
 
