@@ -180,6 +180,29 @@ propriedades causa reflow, logo não há blur.
 Desligue `hideNativeWebBar` pra voltar ao comportamento do Unity: o preview se desliga na web e a barra
 HTML original reaparece, reposicionada por `transform` (que também não causa blur).
 
+#### Desktop
+
+Em modo `Auto`, no `Awake`, a feature inteira **se desliga** num browser de desktop:
+
+```csharp
+if (settings.activationMode == Auto && !WebGLKeyboardBridge.IsTouchPrimary)
+{
+    WebGLKeyboardBridge.SetNativeBarHidden(false);
+    HideView();
+    enabled = false;
+    return;
+}
+```
+
+`enabled = false` no `Awake` faz o Unity pular `OnEnable`, `Update`, `LateUpdate` e `OnGUI` — inclusive o
+overlay de diagnóstico. A barra HTML do Unity fica intocada, que é o comportamento padrão dele no desktop.
+
+`IsTouchPrimary` pergunta ao **browser**, não ao `TouchScreenKeyboard.isSupported`. Esse último só espelha
+o regex de user agent do Unity, que pode marcar um PC com mouse como mobile — e aí a barra aparecia no
+desktop. "Não sei responder" conta como desktop, ou seja, falha fechado.
+
+`activationMode = Always` ignora esse gate, pra quem quiser testar no PC de propósito.
+
 #### Blur espúrio
 
 O Unity destrói a barra inteira em **qualquer** blur do input:

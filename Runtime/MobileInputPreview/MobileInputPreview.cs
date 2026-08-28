@@ -94,12 +94,6 @@ namespace GGTools.TMProUltilitis
             Instance = this;
             keyboardSensor.Configure(settings);
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-            // Unity's HTML bar keeps its input focused while invisible, so typing still works and this
-            // preview mirrors it. Without hiding it, the two bars would fight over the same screen edge.
-            WebGLKeyboardBridge.SetNativeBarHidden(settings.hideNativeWebBar);
-#endif
-
             if (view == null)
             {
                 view = GetComponentInChildren<MobileInputPreviewView>(true);
@@ -114,6 +108,32 @@ namespace GGTools.TMProUltilitis
             {
                 DontDestroyOnLoad(gameObject);
             }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Hard gate for desktop browsers.
+            //
+            // Asking TouchScreenKeyboard.isSupported is not enough: it only mirrors Unity's own user
+            // agent regex, which can flag a mouse driven PC as mobile. The browser itself is asked
+            // whether the PRIMARY pointer is coarse, and a "cannot tell" answer counts as desktop.
+            //
+            // Everything shuts down here, diagnostics overlay included, because a disabled component
+            // gets no Update, no LateUpdate and no OnGUI.
+            if (settings.activationMode == PreviewActivationMode.Auto && !WebGLKeyboardBridge.IsTouchPrimary)
+            {
+                WebGLKeyboardBridge.SetNativeBarHidden(false);
+                WebGLKeyboardBridge.SetKeepFocus(false);
+                HideView();
+                enabled = false;
+
+                Debug.Log(LogPrefix + "Desktop browser: the primary pointer is not a finger. Preview disabled " +
+                          "and Unity's own keyboard bar left untouched.");
+                return;
+            }
+
+            // Unity's HTML bar keeps its input focused while invisible, so typing still works and this
+            // preview mirrors it. Without hiding it, the two bars would fight over the same screen edge.
+            WebGLKeyboardBridge.SetNativeBarHidden(settings.hideNativeWebBar);
+#endif
         }
 
         private void OnEnable()
@@ -446,7 +466,14 @@ namespace GGTools.TMProUltilitis
                     // Unity draws its own HTML input bar over the canvas on WebGL, and it anchors it with
                     // position:fixed bottom:0, which lands behind the soft keyboard. Taking over means
                     // hiding that bar, so this preview only runs when hideNativeWebBar is on.
-                    return settings.hideNativeWebBar && TouchScreenKeyboard.isSupported;
+                    //
+                    // IsTouchPrimary is asked of the browser directly and is the decisive gate. It is not
+                    // enough to trust TouchScreenKeyboard.isSupported here: that only mirrors Unity's own
+                    // user agent regex, which can flag a mouse driven desktop as mobile, and then this
+                    // preview would show up on a PC.
+                    return settings.hideNativeWebBar
+                           && TouchScreenKeyboard.isSupported
+                           && WebGLKeyboardBridge.IsTouchPrimary;
 #else
                     return TouchScreenKeyboard.isSupported || (Application.isEditor && settings.simulateInEditor);
 #endif

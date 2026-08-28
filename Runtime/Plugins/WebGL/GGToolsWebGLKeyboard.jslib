@@ -82,6 +82,23 @@ var GGToolsWebGLKeyboardLib = {
         return 2;
     },
 
+    // Is the PRIMARY pointing device a finger? Evaluated straight from the browser, independent of
+    // Module.SystemInfo.mobile, so it stays truthful even when Unity's own user agent regex already
+    // flagged the browser as mobile.
+    // Returns: 1 = touch primary, 0 = not, -1 = cannot tell.
+    GGToolsWebGL_IsTouchPrimary: function()
+    {
+        if (typeof navigator === "undefined" || typeof window === "undefined" || !window.matchMedia) {
+            return -1;
+        }
+
+        var touchPrimary = navigator.maxTouchPoints > 1 &&
+                           window.matchMedia("(pointer: coarse)").matches &&
+                           window.matchMedia("(hover: none)").matches;
+
+        return touchPrimary ? 1 : 0;
+    },
+
     // Diagnostics only: what the browser reports, without changing anything.
     // Returns: 0 = not mobile and not touch primary, 1 = mobile, 2 = not mobile but touch primary.
     GGToolsWebGL_GetMobileState: function()

@@ -75,7 +75,40 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_GetProbeValue(int index);
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_IsTouchPrimary();
 #endif
+
+        /// <summary>
+        /// True when the browser says the PRIMARY pointing device is a finger.
+        ///
+        /// <para>
+        /// Read straight from the browser rather than through <see cref="TouchScreenKeyboard.isSupported"/>,
+        /// which only mirrors Unity's own user agent regex. A desktop with a touch screen still has a mouse
+        /// as its primary pointer and must not get the mobile preview.
+        /// </para>
+        ///
+        /// <para>Returns false outside a WebGL player, and false when the browser cannot answer.</para>
+        /// </summary>
+        public static bool IsTouchPrimary
+        {
+            get
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                try
+                {
+                    return GGToolsWebGL_IsTouchPrimary() == 1;
+                }
+                catch (System.Exception)
+                {
+                    return false;
+                }
+#else
+                return false;
+#endif
+            }
+        }
 
         /// <summary>
         /// While true, spurious blurs on Unity's hidden input are swallowed and focus is taken straight
@@ -196,7 +229,8 @@ namespace GGTools.TMProUltilitis
                        "\ntouch=" + GGToolsWebGL_GetProbeValue(0) +
                        " coarse=" + GGToolsWebGL_GetProbeValue(1) +
                        " nohover=" + GGToolsWebGL_GetProbeValue(2) +
-                       " forced=" + GGToolsWebGL_GetProbeValue(3);
+                       " forced=" + GGToolsWebGL_GetProbeValue(3) +
+                       " primary=" + GGToolsWebGL_IsTouchPrimary();
             }
             catch (System.Exception)
             {
