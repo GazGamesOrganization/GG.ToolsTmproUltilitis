@@ -239,9 +239,20 @@ Nesses casos `TouchScreenKeyboard.isSupported` é `false`, o `TMP_InputField` nu
 campo fica inutilizável. Foi isso que fez uns jogos seus funcionarem na web e outros não — é **device**, não
 template nem projeto.
 
-O bridge sobrescreve `Module.SystemInfo.mobile` quando `navigator.maxTouchPoints > 1` — mesmo heurístico que
-o próprio Unity usa pra detectar iPad. Desktop com mouse fica intocado. Roda sozinho em
-`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`.
+O bridge sobrescreve `Module.SystemInfo.mobile`, mas só quando o **ponteiro primário é o dedo**:
+
+```js
+navigator.maxTouchPoints > 1
+  && matchMedia("(pointer: coarse)").matches
+  && matchMedia("(hover: none)").matches
+```
+
+`maxTouchPoints` sozinho não serve: notebook com tela touch, monitor touch e vários Windows que só expõem
+um digitalizador HID reportam 10. Forçar mobile ali fazia a barra aparecer em máquina tocada a mouse.
+
+As media queries testam o ponteiro **primário**. Desktop com tela touch continua com mouse como primário →
+`(pointer: fine)`, `(hover: hover)` → fica de fora. iPad mandando UA de desktop → coarse e sem hover →
+entra. Roda sozinho em `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`.
 
 #### Fix 2 — a barra do Unity aparece atrás do teclado
 

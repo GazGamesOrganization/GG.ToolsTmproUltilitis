@@ -72,6 +72,9 @@ namespace GGTools.TMProUltilitis
 
         [DllImport("__Internal")]
         private static extern int GGToolsWebGL_SetKeepFocus(int keep);
+
+        [DllImport("__Internal")]
+        private static extern int GGToolsWebGL_GetProbeValue(int index);
 #endif
 
         /// <summary>
@@ -189,7 +192,11 @@ namespace GGTools.TMProUltilitis
                        " keep=" + GGToolsWebGL_GetDebugValue(14) +
                        " blur=" + GGToolsWebGL_GetDebugValue(15) +
                        " refoc=" + GGToolsWebGL_GetDebugValue(16) +
-                       " rm=" + GGToolsWebGL_GetDebugValue(17);
+                       " rm=" + GGToolsWebGL_GetDebugValue(17) +
+                       "\ntouch=" + GGToolsWebGL_GetProbeValue(0) +
+                       " coarse=" + GGToolsWebGL_GetProbeValue(1) +
+                       " nohover=" + GGToolsWebGL_GetProbeValue(2) +
+                       " forced=" + GGToolsWebGL_GetProbeValue(3);
             }
             catch (System.Exception)
             {

@@ -49,16 +49,41 @@ var GGToolsWebGLKeyboardLib = {
             return 1;
         }
 
-        if (typeof navigator === "undefined" || !(navigator.maxTouchPoints > 1)) {
+        // "Has a touch digitizer" is NOT the same as "touch is how this thing is used".
+        // navigator.maxTouchPoints alone reports 10 on plenty of Windows desktops and laptops that
+        // have a touch screen or merely expose a HID digitizer, and forcing mobile there pops the
+        // soft keyboard bar on a machine driven by a mouse.
+        //
+        // The media queries below are the standard touch-primary test:
+        //   (pointer: coarse) - the PRIMARY pointing device is a finger, not a mouse
+        //   (hover: none)     - the PRIMARY pointing device cannot hover
+        // A desktop with a touch screen still has a mouse as primary, so it reports
+        // (pointer: fine) and (hover: hover) and is correctly left alone. An iPad sending a
+        // desktop user agent reports coarse and no-hover, and is correctly picked up.
+        var probe = { maxTouch: 0, coarse: 0, noHover: 0, forced: 0 };
+        if (typeof window !== "undefined") {
+            window["__ggtoolsMobileProbe"] = probe;
+        }
+
+        if (typeof navigator === "undefined" || typeof window === "undefined" || !window.matchMedia) {
             return 0;
         }
 
+        probe.maxTouch = navigator.maxTouchPoints || 0;
+        probe.coarse = window.matchMedia("(pointer: coarse)").matches ? 1 : 0;
+        probe.noHover = window.matchMedia("(hover: none)").matches ? 1 : 0;
+
+        if (probe.maxTouch <= 1 || !probe.coarse || !probe.noHover) {
+            return 0;
+        }
+
+        probe.forced = 1;
         Module.SystemInfo.mobile = true;
         return 2;
     },
 
     // Diagnostics only: what the browser reports, without changing anything.
-    // Returns: 0 = not mobile and not touch, 1 = mobile, 2 = not mobile but touch capable.
+    // Returns: 0 = not mobile and not touch primary, 1 = mobile, 2 = not mobile but touch primary.
     GGToolsWebGL_GetMobileState: function()
     {
         if (typeof Module === "undefined" || !Module.SystemInfo) {
@@ -69,7 +94,15 @@ var GGToolsWebGLKeyboardLib = {
             return 1;
         }
 
-        return (typeof navigator !== "undefined" && navigator.maxTouchPoints > 1) ? 2 : 0;
+        if (typeof navigator === "undefined" || typeof window === "undefined" || !window.matchMedia) {
+            return 0;
+        }
+
+        var touchPrimary = navigator.maxTouchPoints > 1 &&
+                           window.matchMedia("(pointer: coarse)").matches &&
+                           window.matchMedia("(hover: none)").matches;
+
+        return touchPrimary ? 2 : 0;
     },
 
     // Keeps Unity's own keyboard bar above the soft keyboard.
@@ -396,6 +429,24 @@ var GGToolsWebGLKeyboardLib = {
             case 15: return state.blurCount;
             case 16: return state.refocusCount;
             case 17: return state.removeCount;
+            default: return -1;
+        }
+    },
+
+    // Diagnostics for the touch-primary probe, which runs before the watcher is installed.
+    //   0 navigator.maxTouchPoints   1 (pointer: coarse)   2 (hover: none)   3 forced mobile
+    GGToolsWebGL_GetProbeValue: function(index)
+    {
+        var probe = (typeof window !== "undefined") ? window["__ggtoolsMobileProbe"] : null;
+        if (!probe) {
+            return -1;
+        }
+
+        switch (index) {
+            case 0: return probe.maxTouch;
+            case 1: return probe.coarse;
+            case 2: return probe.noHover;
+            case 3: return probe.forced;
             default: return -1;
         }
     }
